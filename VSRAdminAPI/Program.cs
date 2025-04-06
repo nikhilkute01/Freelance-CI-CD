@@ -9,6 +9,9 @@ using VSRAdminAPI.Model;
 using VSRAdminAPI.Model.Common;
 using VSRAdminAPI.Repository;
 using VSRAdminAPI.Middleware;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
+using System.Text.Json;
 
 // Configure Serilog logger
 Log.Logger = new LoggerConfiguration()
@@ -23,9 +26,11 @@ try
 
     var builder = WebApplication.CreateBuilder(args);
 
-    // ✅ Azure App Services dynamic port binding
-    var port = Environment.GetEnvironmentVariable("PORT") ?? "80";
-    builder.WebHost.UseUrls($"http://*:{port}");
+    // Configuration for Azure App Service
+    builder.WebHost.ConfigureKestrel(serverOptions =>
+    {
+        serverOptions.ListenAnyIP(8080); // Azure App Service default port
+    });
 
     // Configuration
     builder.Configuration.AddJsonFile("appsettings.json", optional: false, reloadOnChange: true);
@@ -36,6 +41,10 @@ try
 
     // Services
     builder.Services.AddSingleton<IConfiguration>(builder.Configuration);
+
+    // Health Checks
+    builder.Services.AddHealthChecks()
+        .AddCheck("self", () => HealthCheckResult.Healthy());
 
     // CORS
     builder.Services.AddCors(options =>
@@ -85,11 +94,45 @@ try
         app.UseHsts();
     }
 
-    app.UseMiddleware<ErrorHandlerMiddleware>();
-    app.UseHttpsRedirection();
+    // Only use HTTPS redirection in production
+    if (!app.Environment.IsDevelopment())
+    {
+        app.UseHttpsRedirection();
+    }
 
-    // ✅ Default route to test deployment
-    app.MapGet("/", () => "Hello from VSRAdminAPI!");
+    app.UseMiddleware<ErrorHandlerMiddleware>();
+
+    // Health check endpoints
+    app.MapHealthChecks("/health", new HealthCheckOptions
+    {
+        ResponseWriter = async (context, report) =>
+        {
+            context.Response.ContentType = "application/json";
+            var response = new
+            {
+                Status = report.Status.ToString(),
+                Checks = report.Entries.Select(e => new
+                {
+                    Name = e.Key,
+                    Status = e.Value.Status.ToString(),
+                    Description = e.Value.Description
+                }),
+                Duration = report.TotalDuration
+            };
+            await context.Response.WriteAsync(JsonSerializer.Serialize(response));
+        }
+    });
+
+    app.MapGet("/ping", () => "pong");
+
+    // Root endpoint
+    app.MapGet("/", () => new
+    {
+        Status = "API is running",
+        Environment = app.Environment.EnvironmentName,
+        DateTime = DateTime.UtcNow,
+        Version = "1.0"
+    }).WithTags("Health").Produces(200);
 
     // Login API
     app.MapPost("/api/ValidateLogin", ([FromBody] LoginValues loginvalues, [FromServices] ICompanyService companyService) =>
@@ -254,9 +297,9 @@ try
     // Global error handler
     app.Map("/error", () => Results.Problem("An error occurred", statusCode: 500));
 
-    // Startup message
     Log.Information("Application starting up...");
     Log.Information("Environment: {Environment}", app.Environment.EnvironmentName);
+    Log.Information("Listening on port 8080");
 
     app.Run();
 }
