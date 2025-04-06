@@ -23,7 +23,7 @@ try
 
     var builder = WebApplication.CreateBuilder(args);
 
-    // ✅ Azure dynamic port binding (Kestrel-compatible)
+    // Ensure app binds to correct port (Azure passes this via env)
     var port = Environment.GetEnvironmentVariable("PORT") ?? "80";
     builder.WebHost.ConfigureKestrel(options =>
     {
@@ -91,8 +91,8 @@ try
     app.UseMiddleware<ErrorHandlerMiddleware>();
     app.UseHttpsRedirection();
 
-    // ✅ Default test route
-    app.MapGet("/", () => "Hello from VSRAdminAPI!");
+    // ✅ Default health/test route
+    app.MapGet("/", () => Results.Ok("Hello from VSRAdminAPI!"));
 
     // Login API
     app.MapPost("/api/ValidateLogin", ([FromBody] LoginValues loginvalues, [FromServices] ICompanyService companyService) =>
@@ -127,10 +127,10 @@ try
             MasterCustomer objContact = JsonConvert.DeserializeObject<MasterCustomer>(customerdata)
                 ?? throw new InvalidOperationException("Deserialization returned null");
 
-            // File handling
             if (file != null)
             {
-                var directory = Path.Combine("D:\\var\\www\\restaurantlogo");
+                // Use Linux-friendly path inside container
+                var directory = "/app/restaurantlogo";
                 Directory.CreateDirectory(directory);
 
                 var filePath = Path.Combine(directory, $"{objContact.DID}.jpg");
@@ -260,7 +260,7 @@ try
     Log.Information("Application starting up...");
     Log.Information("Environment: {Environment}", app.Environment.EnvironmentName);
 
-    app.Run();
+    app.Run($"http://0.0.0.0:{port}");
 }
 catch (Exception ex)
 {
