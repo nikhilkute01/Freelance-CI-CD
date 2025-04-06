@@ -8,8 +8,6 @@ using VSRAdminAPI.Services;
 using VSRAdminAPI.Model;
 using VSRAdminAPI.Model.Common;
 using VSRAdminAPI.Repository;
-using Microsoft.AspNetCore.Antiforgery;
-using static System.Net.Mime.MediaTypeNames;
 using VSRAdminAPI.Middleware;
 
 // Configure Serilog logger
@@ -22,26 +20,23 @@ Log.Logger = new LoggerConfiguration()
 try
 {
     Log.Information("Starting web host");
-    
+
     var builder = WebApplication.CreateBuilder(args);
+
+    // ✅ Azure App Services dynamic port binding
+    var port = Environment.GetEnvironmentVariable("PORT") ?? "80";
+    builder.WebHost.UseUrls($"http://*:{port}");
 
     // Configuration
     builder.Configuration.AddJsonFile("appsettings.json", optional: false, reloadOnChange: true);
     builder.Configuration.AddEnvironmentVariables();
 
-    // Kestrel configuration for production
-    if (!builder.Environment.IsDevelopment())
-    {
-        builder.WebHost.ConfigureKestrel(options =>
-        {
-            options.ListenAnyIP(80);
-            options.ListenAnyIP(443);
-        });
-    }
+    // Logging
+    builder.Host.UseSerilog();
 
     // Services
     builder.Services.AddSingleton<IConfiguration>(builder.Configuration);
-    
+
     // CORS
     builder.Services.AddCors(options =>
     {
@@ -52,9 +47,6 @@ try
                    .AllowAnyHeader();
         });
     });
-
-    // Logging
-    builder.Host.UseSerilog();
 
     // Swagger
     builder.Services.AddEndpointsApiExplorer();
@@ -81,7 +73,7 @@ try
     {
         app.UseDeveloperExceptionPage();
         app.UseSwagger();
-        app.UseSwaggerUI(c => 
+        app.UseSwaggerUI(c =>
         {
             c.SwaggerEndpoint("/swagger/v1/swagger.json", "VSRAdmin API v1");
             c.RoutePrefix = "swagger";
@@ -96,7 +88,10 @@ try
     app.UseMiddleware<ErrorHandlerMiddleware>();
     app.UseHttpsRedirection();
 
-    // Endpoints
+    // ✅ Default route to test deployment
+    app.MapGet("/", () => "Hello from VSRAdminAPI!");
+
+    // Login API
     app.MapPost("/api/ValidateLogin", ([FromBody] LoginValues loginvalues, [FromServices] ICompanyService companyService) =>
     {
         if (loginvalues == null)
@@ -109,10 +104,9 @@ try
         return Results.Ok(genericResponse);
     }).WithTags("Login").Produces<GenericResponse>(200).Produces(400);
 
-    app.MapGet("/", () => Results.Ok("Hello, World from VSRAdminAPI!")).WithTags("Root");
-
+    // Add Restaurant API
     app.MapPost("/api/Restaurant", async (HttpRequest request,
-        [FromServices] ICompanyService companyService, 
+        [FromServices] ICompanyService companyService,
         [FromServices] ILogger<Program> logger) =>
     {
         try
@@ -127,7 +121,7 @@ try
                 return Results.BadRequest(new { Message = "Customer data is required." });
             }
 
-            MasterCustomer objContact = JsonConvert.DeserializeObject<MasterCustomer>(customerdata) 
+            MasterCustomer objContact = JsonConvert.DeserializeObject<MasterCustomer>(customerdata)
                 ?? throw new InvalidOperationException("Deserialization returned null");
 
             // File handling
@@ -135,7 +129,7 @@ try
             {
                 var directory = Path.Combine("D:\\var\\www\\restaurantlogo");
                 Directory.CreateDirectory(directory);
-                
+
                 var filePath = Path.Combine(directory, $"{objContact.DID}.jpg");
                 await using var fileStream = new FileStream(filePath, FileMode.Create);
                 await file.CopyToAsync(fileStream);
@@ -167,8 +161,9 @@ try
     .Produces(400)
     .Produces(500);
 
-    app.MapGet("/api/Restaurant", ([FromQuery] string? search, [FromQuery] int pageno, 
-        [FromServices] ICompanyService companyService, 
+    // Load Restaurant API
+    app.MapGet("/api/Restaurant", ([FromQuery] string? search, [FromQuery] int pageno,
+        [FromServices] ICompanyService companyService,
         [FromServices] ILogger<Program> logger) =>
     {
         try
@@ -198,15 +193,15 @@ try
     .Produces(400)
     .Produces(500);
 
-    // Other endpoints
-    app.MapPost("/api/Instruction", ([FromBody] ReqInput reqInput, 
+    // Add Instruction
+    app.MapPost("/api/Instruction", ([FromBody] ReqInput reqInput,
         [FromServices] IRestaurantInstructionService restaurantInstructionService) =>
     {
         if (reqInput == null)
         {
             return Results.BadRequest("Request input is required");
         }
-        
+
         var genericResponse = restaurantInstructionService.AddInstruction(reqInput);
         return Results.Ok(genericResponse);
     })
@@ -214,14 +209,15 @@ try
     .Produces<GenericResponse>(200)
     .Produces(400);
 
-    app.MapGet("/api/Instruction", (int customerid, 
+    // Load Instruction
+    app.MapGet("/api/Instruction", (int customerid,
         [FromServices] IRestaurantInstructionService restaurantInstructionService) =>
     {
         if (customerid <= 0)
         {
             return Results.BadRequest("Valid customer ID is required");
         }
-        
+
         var genericResponse = restaurantInstructionService.LoadInstruction(customerid);
         return Results.Ok(genericResponse);
     })
@@ -229,7 +225,8 @@ try
     .Produces<GenericResponse>(200)
     .Produces(400);
 
-    app.MapPost("/api/CustomerInfo", ([FromBody] CustomerInfo addcustomerinfo, 
+    // Customer Info
+    app.MapPost("/api/CustomerInfo", ([FromBody] CustomerInfo addcustomerinfo,
         [FromServices] ICustomerService customerService,
         [FromServices] ILogger<Program> logger) =>
     {
@@ -239,7 +236,7 @@ try
             {
                 return Results.BadRequest("Customer info is required");
             }
-            
+
             GenericResponse genericResponse = customerService.Customerinfo(addcustomerinfo);
             return Results.Ok(genericResponse);
         }
@@ -260,7 +257,7 @@ try
     // Startup message
     Log.Information("Application starting up...");
     Log.Information("Environment: {Environment}", app.Environment.EnvironmentName);
-    
+
     app.Run();
 }
 catch (Exception ex)

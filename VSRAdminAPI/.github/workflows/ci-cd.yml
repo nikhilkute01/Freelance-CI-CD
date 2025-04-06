@@ -24,17 +24,23 @@ jobs:
       with:
         creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-    - name: Login to ACR
+    - name: Azure CLI - Login to ACR
       run: |
         az acr login --name $ACR_NAME
 
-    - name: Build and push .NET Core API image to ACR
+    - name: Build and push Docker image to ACR
       run: |
-        docker build -t $AZURE_CONTAINER_REGISTRY/api:latest .
+        docker build -t $AZURE_CONTAINER_REGISTRY/api:latest ./VSRAdminAPI
         docker push $AZURE_CONTAINER_REGISTRY/api:latest
 
-    - name: Deploy .NET Core API to Azure App Service (Container)
+    - name: Deploy image to Azure App Service (Container)
       uses: azure/webapps-deploy@v3
       with:
         app-name: ${{ env.API_APP_NAME }}
         images: ${{ env.AZURE_CONTAINER_REGISTRY }}/api:latest
+
+    - name: Wait for app to become available and test root endpoint (optional)
+      run: |
+        echo "Waiting for deployment to propagate..."
+        sleep 30
+        curl -v https://${{ env.API_APP_NAME }}.azurewebsites.net/
