@@ -21,14 +21,22 @@ try
 {
     Log.Information("Starting web host");
 
-    var builder = WebApplication.CreateBuilder(args);
+var builder = WebApplication.CreateBuilder(args);
 
-    // Ensure app binds to correct port (Azure passes this via env)
-    var port = Environment.GetEnvironmentVariable("PORT") ?? "80";
-    builder.WebHost.ConfigureKestrel(options =>
-    {
-        options.ListenAnyIP(int.Parse(port));
-    });
+var app = builder.Build();
+
+// Get the port from environment variable or default to 80
+var port = Environment.GetEnvironmentVariable("PORT") ?? "80";
+
+app.Urls.Add($"http://*:{port}");
+
+// Your middleware/config remains unchanged
+app.UseAuthorization();
+app.MapControllers();
+
+app.Run();
+
+
 
     // Configuration
     builder.Configuration.AddJsonFile("appsettings.json", optional: false, reloadOnChange: true);
