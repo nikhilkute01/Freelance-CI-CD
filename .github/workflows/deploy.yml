@@ -4,7 +4,6 @@ on:
   workflow_dispatch:
 
 env:
-  ACR_NAME: ${{ secrets.ACR_NAME }}
   AZURE_CONTAINER_REGISTRY: ${{ secrets.ACR_NAME }}.azurecr.io
   RESOURCE_GROUP: ${{ secrets.RESOURCE_GROUP }}
   API_APP_NAME: ${{ secrets.API_APP_NAME }}
@@ -24,7 +23,7 @@ jobs:
           echo "AZURE_CLIENT_SECRET set: ${{ secrets.AZURE_CLIENT_SECRET != '' }}"
           echo "AZURE_SUBSCRIPTION_ID=${{ secrets.AZURE_SUBSCRIPTION_ID }}"
           echo "AZURE_TENANT_ID=${{ secrets.AZURE_TENANT_ID }}"
-          echo "ACR_NAME=${{ env.ACR_NAME }}"
+          echo "ACR_NAME=${{ secrets.ACR_NAME }}"
           echo "All required secrets present, attempting login next."
 
       - name: Login to Azure
@@ -34,19 +33,19 @@ jobs:
 
       - name: Azure CLI - Login to ACR
         run: |
-          echo "Logging into ACR: $ACR_NAME"
+          echo "Logging into ACR: ${{ secrets.ACR_NAME }}"
           az acr login --name ${{ secrets.ACR_NAME }}
 
       - name: Build and push Docker image to ACR
         run: |
-          docker build -t $AZURE_CONTAINER_REGISTRY/api:latest ./VSRAdminAPI
-          docker push $AZURE_CONTAINER_REGISTRY/api:latest
+          docker build -t ${{ secrets.ACR_NAME }}.azurecr.io/api:latest ./VSRAdminAPI
+          docker push ${{ secrets.ACR_NAME }}.azurecr.io/api:latest
 
       - name: Deploy image to Azure App Service (Container)
         uses: azure/webapps-deploy@v3
         with:
           app-name: ${{ secrets.API_APP_NAME }}
-          images: ${{ secrets.AZURE_CONTAINER_REGISTRY }}/api:latest
+          images: ${{ secrets.ACR_NAME }}.azurecr.io/api:latest
 
       - name: Wait for app to become available and test root endpoint (optional)
         run: |
