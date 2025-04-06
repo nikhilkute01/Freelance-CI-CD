@@ -29,7 +29,7 @@ try
     // 1. Fix for Azure App Service port configuration
     builder.WebHost.ConfigureKestrel(serverOptions =>
     {
-        serverOptions.ListenAnyIP(8080); // Azure Linux uses port 8080
+        serverOptions.ListenAnyIP(80); // Azure Linux uses port 8080
     });
 
     // Configuration
