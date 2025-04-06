@@ -109,6 +109,8 @@ try
         return Results.Ok(genericResponse);
     }).WithTags("Login").Produces<GenericResponse>(200).Produces(400);
 
+    app.MapGet("/", () => Results.Ok("Hello, World from VSRAdminAPI!")).WithTags("Root");
+
     app.MapPost("/api/Restaurant", async (HttpRequest request,
         [FromServices] ICompanyService companyService, 
         [FromServices] ILogger<Program> logger) =>
