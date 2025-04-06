@@ -35,7 +35,7 @@ jobs:
       - name: Azure CLI - Login to ACR
         run: |
           echo "Logging into ACR: $ACR_NAME"
-          az acr login --name $ACR_NAME
+          az acr login --name ${{ secrets.ACR_NAME }}
 
       - name: Build and push Docker image to ACR
         run: |
@@ -45,11 +45,11 @@ jobs:
       - name: Deploy image to Azure App Service (Container)
         uses: azure/webapps-deploy@v3
         with:
-          app-name: ${{ env.API_APP_NAME }}
-          images: ${{ env.AZURE_CONTAINER_REGISTRY }}/api:latest
+          app-name: ${{ secrets.API_APP_NAME }}
+          images: ${{ secrets.AZURE_CONTAINER_REGISTRY }}/api:latest
 
       - name: Wait for app to become available and test root endpoint (optional)
         run: |
           echo "Waiting for deployment to propagate..."
           sleep 30
-          curl -v https://${{ env.API_APP_NAME }}.azurewebsites.net/
+          curl -v https://${{ secrets.API_APP_NAME }}.azurewebsites.net/
