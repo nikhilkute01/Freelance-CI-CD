@@ -34,7 +34,7 @@ jobs:
 
     - name: Azure CLI - Login to ACR
       run: |
-        az acr login --name $ACR_NAME
+        az acr login --name ${{ secrets.ACR_NAME }}
 
     - name: Build and push Docker image to ACR
       run: |
