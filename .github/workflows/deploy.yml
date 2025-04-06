@@ -1,9 +1,8 @@
 name: Build and Deploy .NET Core API to Azure App Service (Container)
 
 on:
-  push:
-    branches:
-      - main
+  workflow_dispatch:
+   
 
 env:
   ACR_NAME: ${{ secrets.ACR_NAME }}
