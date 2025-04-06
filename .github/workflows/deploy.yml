@@ -11,40 +11,23 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Debug secrets
-        run: |
-          echo "ACR_NAME=${{ secrets.ACR_NAME }}"
-          echo "RESOURCE_GROUP=${{ secrets.RESOURCE_GROUP }}"
-          echo "API_APP_NAME=${{ secrets.API_APP_NAME }}"
-          echo "If any are empty, check repository secrets."
-
       - name: Login to Azure
         uses: azure/login@v2
         with:
           creds: '{"clientId":"${{ secrets.AZURE_CLIENT_ID }}","clientSecret":"${{ secrets.AZURE_CLIENT_SECRET }}","subscriptionId":"${{ secrets.AZURE_SUBSCRIPTION_ID }}","tenantId":"${{ secrets.AZURE_TENANT_ID }}"}'
 
-      - name: Docker login to ACR
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ secrets.ACR_NAME }}.azurecr.io
-          username: ${{ secrets.ACR_USERNAME }}
-          password: ${{ secrets.ACR_PASSWORD }}
+      - name: Login to ACR using Azure CLI
+        run: az acr login --name ${{ secrets.ACR_NAME }}
 
       - name: Build and push Docker image to ACR
         run: |
-          docker build -t $AZURE_CONTAINER_REGISTRY/api:latest ./VSRAdminAPI
-          docker push $AZURE_CONTAINER_REGISTRY/api:latest
+          docker build -t $ACR_URL/api:latest ./VSRAdminAPI
+          docker push $ACR_URL/api:latest
         env:
-          AZURE_CONTAINER_REGISTRY: ${{ secrets.ACR_NAME }}.azurecr.io
+          ACR_URL: ${{ secrets.ACR_NAME }}.azurecr.io
 
       - name: Deploy to Azure App Service
         uses: azure/webapps-deploy@v3
         with:
           app-name: ${{ secrets.API_APP_NAME }}
           images: ${{ secrets.ACR_NAME }}.azurecr.io/api:latest
-
-      - name: Wait and test endpoint (optional)
-        run: |
-          echo "Waiting 30 seconds for deployment..."
-          sleep 30
-          curl -v https://${{ secrets.API_APP_NAME }}.azurewebsites.net/
