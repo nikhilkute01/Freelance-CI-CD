@@ -7,9 +7,6 @@ using VSRAdminAPI.Model.Common;
 using VSRAdminAPI.Repository;
 using VSRAdminAPI.Services;
 
-// Get PORT from environment variable (Azure passes this at runtime)
-var port = Environment.GetEnvironmentVariable("PORT") ?? "8080";
-
 // Configure Serilog logger
 Log.Logger = new LoggerConfiguration()
     .MinimumLevel.Debug()
@@ -59,10 +56,15 @@ try
         c.SwaggerDoc("v1", new() { Title = "VSRAdmin API", Version = "v1" });
     });
 
-    var app = builder.Build();
+    // ✅ PORT binding via env/config
+    string port = Environment.GetEnvironmentVariable("PORT") ?? builder.Configuration["AppPort"] ?? "8080";
 
-    // ✅ BIND TO ENV PORT (this is key for Azure)
-    app.Urls.Add($"http://*:{port}");
+    builder.WebHost.ConfigureKestrel(options =>
+    {
+        options.ListenAnyIP(int.Parse(port));
+    });
+
+    var app = builder.Build();
 
     // Middleware
     app.UseSerilogRequestLogging();
