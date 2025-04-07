@@ -7,7 +7,8 @@ using VSRAdminAPI.Model.Common;
 using VSRAdminAPI.Repository;
 using VSRAdminAPI.Services;
 
-var port = Environment.GetEnvironmentVariable("PORT") ?? "80";
+// Get PORT from environment variable (Azure passes this at runtime)
+var port = Environment.GetEnvironmentVariable("PORT") ?? "8080";
 
 // Configure Serilog logger
 Log.Logger = new LoggerConfiguration()
@@ -60,13 +61,14 @@ try
 
     var app = builder.Build();
 
-    // URLs
+    // ✅ BIND TO ENV PORT (this is key for Azure)
     app.Urls.Add($"http://*:{port}");
 
     // Middleware
     app.UseSerilogRequestLogging();
     app.UseCors("AllowAll");
     app.UseMiddleware<ErrorHandlerMiddleware>();
+
     app.UseHttpsRedirection();
     app.UseAuthorization();
 
@@ -85,10 +87,10 @@ try
         app.UseHsts();
     }
 
-    // Default health check
+    // Health check
     app.MapGet("/", () => Results.Ok("Hello from VSRAdminAPI!"));
 
-    // Login API
+    // Login
     app.MapPost("/api/ValidateLogin", ([FromBody] LoginValues loginvalues, [FromServices] ICompanyService companyService) =>
     {
         if (loginvalues == null)
@@ -101,7 +103,7 @@ try
         return Results.Ok(genericResponse);
     }).WithTags("Login").Produces<GenericResponse>(200).Produces(400);
 
-    // Add Restaurant API
+    // Add Restaurant
     app.MapPost("/api/Restaurant", async (HttpRequest request,
         [FromServices] ICompanyService companyService,
         [FromServices] ILogger<Program> logger) =>
@@ -156,7 +158,7 @@ try
       .Produces(400)
       .Produces(500);
 
-    // Load Restaurant API
+    // Load Restaurant
     app.MapGet("/api/Restaurant", ([FromQuery] string? search, [FromQuery] int pageno,
         [FromServices] ICompanyService companyService,
         [FromServices] ILogger<Program> logger) =>
