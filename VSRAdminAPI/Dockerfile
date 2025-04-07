@@ -6,21 +6,18 @@ EXPOSE 443
 
 # Build stage with SDK
 FROM mcr.microsoft.com/dotnet/sdk:6.0 AS build
-ARG BUILD_CONFIGURATION=Release
 WORKDIR /src
 
-# Copy only the csproj
-COPY ["VSRAdminAPI.csproj", "./"]
+# Copy only the csproj file first
+COPY ["VSRAdminAPI.csproj", "."]
 RUN dotnet restore "VSRAdminAPI.csproj"
 
-# Copy all source files
+# Copy everything else
 COPY . .
 
-# Build the application
-RUN dotnet build "VSRAdminAPI.csproj" -c $BUILD_CONFIGURATION -o /app/build
-
-# Publish the application
-RUN dotnet publish "VSRAdminAPI.csproj" -c $BUILD_CONFIGURATION -o /app/publish /p:UseAppHost=false
+# Build and publish
+RUN dotnet build "VSRAdminAPI.csproj" -c Release -o /app/build
+RUN dotnet publish "VSRAdminAPI.csproj" -c Release -o /app/publish
 
 # Final runtime image
 FROM base AS final

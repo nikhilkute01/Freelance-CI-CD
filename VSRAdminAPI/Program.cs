@@ -1,14 +1,13 @@
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
 using Newtonsoft.Json;
 using Serilog;
-using VSRAdminAPI.Services;
+using VSRAdminAPI.Middleware;
 using VSRAdminAPI.Model;
 using VSRAdminAPI.Model.Common;
 using VSRAdminAPI.Repository;
-using VSRAdminAPI.Middleware;
+using VSRAdminAPI.Services;
+
+var port = Environment.GetEnvironmentVariable("PORT") ?? "80";
 
 // Configure Serilog logger
 Log.Logger = new LoggerConfiguration()
@@ -21,41 +20,34 @@ try
 {
     Log.Information("Starting web host");
 
-var builder = WebApplication.CreateBuilder(args);
+    var builder = WebApplication.CreateBuilder(args);
 
-var app = builder.Build();
-
-// Get the port from environment variable or default to 80
-var port = Environment.GetEnvironmentVariable("PORT") ?? "80";
-
-app.Urls.Add($"http://*:{port}");
-
-// Your middleware/config remains unchanged
-app.UseAuthorization();
-app.MapControllers();
-
-app.Run();
-
-
+    // Use Serilog
+    builder.Host.UseSerilog();
 
     // Configuration
     builder.Configuration.AddJsonFile("appsettings.json", optional: false, reloadOnChange: true);
     builder.Configuration.AddEnvironmentVariables();
 
-    // Logging
-    builder.Host.UseSerilog();
-
     // Services
+    builder.Services.AddControllers();
     builder.Services.AddSingleton<IConfiguration>(builder.Configuration);
+
+    builder.Services.AddScoped<ICompanyService, CompanyService>();
+    builder.Services.AddScoped<ICompanyRepository, CompanyRepository>();
+    builder.Services.AddScoped<ICustomerService, CustomerService>();
+    builder.Services.AddScoped<ICustomerRepository, CustomerRepository>();
+    builder.Services.AddScoped<IRestaurantInstructionService, RestaurantInstructionService>();
+    builder.Services.AddScoped<IRestaurantInstructions, RestaurantInstructions>();
 
     // CORS
     builder.Services.AddCors(options =>
     {
-        options.AddPolicy("AllowAll", builder =>
+        options.AddPolicy("AllowAll", policy =>
         {
-            builder.AllowAnyOrigin()
-                   .AllowAnyMethod()
-                   .AllowAnyHeader();
+            policy.AllowAnyOrigin()
+                  .AllowAnyMethod()
+                  .AllowAnyHeader();
         });
     });
 
@@ -66,23 +58,20 @@ app.Run();
         c.SwaggerDoc("v1", new() { Title = "VSRAdmin API", Version = "v1" });
     });
 
-    // Application Services
-    builder.Services.AddScoped<ICompanyService, CompanyService>();
-    builder.Services.AddScoped<ICompanyRepository, CompanyRepository>();
-    builder.Services.AddScoped<ICustomerService, CustomerService>();
-    builder.Services.AddScoped<ICustomerRepository, CustomerRepository>();
-    builder.Services.AddScoped<IRestaurantInstructionService, RestaurantInstructionService>();
-    builder.Services.AddScoped<IRestaurantInstructions, RestaurantInstructions>();
-
     var app = builder.Build();
 
-    // Middleware Pipeline
+    // URLs
+    app.Urls.Add($"http://*:{port}");
+
+    // Middleware
     app.UseSerilogRequestLogging();
     app.UseCors("AllowAll");
+    app.UseMiddleware<ErrorHandlerMiddleware>();
+    app.UseHttpsRedirection();
+    app.UseAuthorization();
 
     if (app.Environment.IsDevelopment())
     {
-        app.UseDeveloperExceptionPage();
         app.UseSwagger();
         app.UseSwaggerUI(c =>
         {
@@ -96,10 +85,7 @@ app.Run();
         app.UseHsts();
     }
 
-    app.UseMiddleware<ErrorHandlerMiddleware>();
-    app.UseHttpsRedirection();
-
-    // ✅ Default health/test route
+    // Default health check
     app.MapGet("/", () => Results.Ok("Hello from VSRAdminAPI!"));
 
     // Login API
@@ -137,7 +123,6 @@ app.Run();
 
             if (file != null)
             {
-                // Use Linux-friendly path inside container
                 var directory = "/app/restaurantlogo";
                 Directory.CreateDirectory(directory);
 
@@ -165,12 +150,11 @@ app.Run();
             logger.LogError(ex, "Unhandled error in AddCompany");
             return Results.Problem($"An unexpected error occurred: {ex.Message}", statusCode: 500);
         }
-    })
-    .WithTags("Restaurant")
-    .Accepts<CustomerFileData>("multipart/form-data")
-    .Produces<GenericResponse>(200)
-    .Produces(400)
-    .Produces(500);
+    }).WithTags("Restaurant")
+      .Accepts<CustomerFileData>("multipart/form-data")
+      .Produces<GenericResponse>(200)
+      .Produces(400)
+      .Produces(500);
 
     // Load Restaurant API
     app.MapGet("/api/Restaurant", ([FromQuery] string? search, [FromQuery] int pageno,
@@ -198,11 +182,10 @@ app.Run();
             logger.LogError(ex, "Error in LoadCompany");
             return Results.Problem($"An error occurred: {ex.Message}", statusCode: 500);
         }
-    })
-    .WithTags("Restaurant")
-    .Produces<GenericResponse>(200)
-    .Produces(400)
-    .Produces(500);
+    }).WithTags("Restaurant")
+      .Produces<GenericResponse>(200)
+      .Produces(400)
+      .Produces(500);
 
     // Add Instruction
     app.MapPost("/api/Instruction", ([FromBody] ReqInput reqInput,
@@ -215,10 +198,7 @@ app.Run();
 
         var genericResponse = restaurantInstructionService.AddInstruction(reqInput);
         return Results.Ok(genericResponse);
-    })
-    .WithTags("Restaurant")
-    .Produces<GenericResponse>(200)
-    .Produces(400);
+    }).WithTags("Restaurant").Produces<GenericResponse>(200).Produces(400);
 
     // Load Instruction
     app.MapGet("/api/Instruction", (int customerid,
@@ -231,10 +211,7 @@ app.Run();
 
         var genericResponse = restaurantInstructionService.LoadInstruction(customerid);
         return Results.Ok(genericResponse);
-    })
-    .WithTags("Restaurant")
-    .Produces<GenericResponse>(200)
-    .Produces(400);
+    }).WithTags("Restaurant").Produces<GenericResponse>(200).Produces(400);
 
     // Customer Info
     app.MapPost("/api/CustomerInfo", ([FromBody] CustomerInfo addcustomerinfo,
@@ -256,19 +233,13 @@ app.Run();
             logger.LogError(ex, "Error in CustomerInfo");
             return Results.Problem($"An error occurred: {ex.Message}", statusCode: 500);
         }
-    })
-    .WithTags("CustomerInfo")
-    .Produces<GenericResponse>(200)
-    .Produces(400)
-    .Produces(500);
+    }).WithTags("CustomerInfo").Produces<GenericResponse>(200).Produces(400).Produces(500);
 
-    // Global error handler
+    // Global Error Fallback
     app.Map("/error", () => Results.Problem("An error occurred", statusCode: 500));
 
-    Log.Information("Application starting up...");
     Log.Information("Environment: {Environment}", app.Environment.EnvironmentName);
-
-    app.Run($"http://0.0.0.0:{port}");
+    app.Run();
 }
 catch (Exception ex)
 {
