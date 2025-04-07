@@ -16,16 +16,8 @@ jobs:
         with:
           creds: '{"clientId":"${{ secrets.AZURE_CLIENT_ID }}","clientSecret":"${{ secrets.AZURE_CLIENT_SECRET }}","subscriptionId":"${{ secrets.AZURE_SUBSCRIPTION_ID }}","tenantId":"${{ secrets.AZURE_TENANT_ID }}"}'
 
-      - name: Login to ACR using Azure CLI
+      - name: Login to Azure Container Registry (ACR)
         run: az acr login --name ${{ secrets.ACR_NAME }}
-      
-      - name: Login to Azure Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ secrets.ACR_NAME }}.azurecr.io
-          username: ${{ secrets.ACR_USERNAME }}
-          password: ${{ secrets.ACR_PASSWORD }}
-
 
       - name: Build and push Docker image to ACR
         run: |
@@ -34,8 +26,12 @@ jobs:
         env:
           ACR_URL: ${{ secrets.ACR_NAME }}.azurecr.io
 
-      - name: Deploy to Azure App Service
-        uses: azure/webapps-deploy@v3
-        with:
-          app-name: ${{ secrets.API_APP_NAME }}
-          images: ${{ secrets.ACR_NAME }}.azurecr.io/api:latest
+      - name: Update Azure Web App to use new Docker image
+        run: |
+          az webapp config container set \
+            --name ${{ secrets.API_APP_NAME }} \
+            --resource-group ${{ secrets.RESOURCE_GROUP }} \
+            --docker-custom-image-name ${{ secrets.ACR_NAME }}.azurecr.io/api:latest \
+            --docker-registry-server-url https://${{ secrets.ACR_NAME }}.azurecr.io \
+            --docker-registry-server-user ${{ secrets.ACR_USERNAME }} \
+            --docker-registry-server-password ${{ secrets.ACR_PASSWORD }}
