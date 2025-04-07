@@ -39,3 +39,9 @@ jobs:
             --docker-registry-server-url https://${{ secrets.ACR_NAME }}.azurecr.io \
             --docker-registry-server-user ${{ secrets.ACR_USERNAME }} \
             --docker-registry-server-password ${{ secrets.ACR_PASSWORD }}
+      - name: 🔄 Restart Azure Web App
+        run: |
+          az webapp restart \
+            --name ${{ secrets.API_APP_NAME }} \
+            --resource-group ${{ secrets.RESOURCE_GROUP }}
+
